@@ -38,10 +38,15 @@ DEPSUFF=.depend.mk
 # to compile .spp files
 #
 AR_PATH?=ar
-AS_PATH?=as
 SED_PATH?=sed
 M4_PATH?=m4
 PERL_PATH?=perl
+
+ifeq ($(OS),osx)
+    AS_PATH?=clang
+else
+    AS_PATH?=as
+endif
 
 # TODO - Redo GCC version logic that used to be here
 ifeq ($(C_COMPILER),gcc)
@@ -52,6 +57,11 @@ endif
 ifeq ($(C_COMPILER),clang)
     CC_PATH?=clang
     CXX_PATH?=clang++
+endif
+
+AS_VERSION:=$(shell $(AS_PATH) --version)
+ifneq (,$(findstring LLVM,$(AS_VERSION)))
+    LLVM_ASSEMBLER:=1
 endif
 
 # This is the script that's used to generate TRBuildName.cpp
@@ -91,6 +101,10 @@ CXX_FLAGS+=\
     -Wno-enum-compare \
     -Wno-invalid-offsetof \
     -Wno-write-strings
+
+ifeq ($(C_COMPILER),clang)
+    SOLINK_FLAGS+=-undefined dynamic_lookup
+endif
 
 CX_DEFINES_DEBUG+=DEBUG
 CX_FLAGS_DEBUG+=-g -ggdb3
@@ -153,13 +167,21 @@ S_INCLUDES=$(PRODUCT_INCLUDES)
 
 S_DEFINES+=$(HOST_DEFINES) $(TARGET_DEFINES)
 
-S_FLAGS+=--noexecstack
+ifeq ($(LLVM_ASSEMBLER),1)
+    S_FLAGS+=-Wa,--noexecstack
+else
+    S_FLAGS+=--noexecstack
+    S_FLAGS_DEBUG+=--gstabs
+endif
 
 S_DEFINES_DEBUG+=DEBUG
-S_FLAGS_DEBUG+=--gstabs
 
 ifeq ($(HOST_ARCH),x)
-    S_FLAGS+=--64
+  ifeq ($(LLVM_ASSEMBLER),1)
+        S_FLAGS+=-march=x86-64 -c
+    else
+        S_FLAGS+=--64
+    endif
 endif
 
 ifeq ($(HOST_ARCH),z)
